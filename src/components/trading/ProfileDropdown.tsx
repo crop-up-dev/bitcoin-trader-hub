@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { UserProfile, getInitials, getAvatarColor, saveProfile } from '@/lib/profile';
 import { Portfolio, formatUSD } from '@/lib/trading';
 import { getCurrentUser, logout } from '@/lib/auth';
-import { User, Settings, LogOut, ChevronDown, Wallet, ShieldCheck } from 'lucide-react';
+import { User, Settings, LogOut, ChevronDown, Wallet, ShieldCheck, BarChart3, ArrowLeftRight, Building2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
@@ -68,6 +68,21 @@ const ProfileDropdown = ({ profile, portfolio, currentPrice, onProfileUpdate, on
         <DropdownMenuItem onClick={() => navigate('/wallet')} className="cursor-pointer">
           <Wallet className="w-4 h-4 mr-2" />
           Wallet
+        </DropdownMenuItem>
+
+        <DropdownMenuItem onClick={() => navigate('/markets')} className="cursor-pointer">
+          <BarChart3 className="w-4 h-4 mr-2" />
+          Markets
+        </DropdownMenuItem>
+
+        <DropdownMenuItem onClick={() => navigate('/binary')} className="cursor-pointer">
+          <ArrowLeftRight className="w-4 h-4 mr-2" />
+          Binary Trading
+        </DropdownMenuItem>
+
+        <DropdownMenuItem onClick={() => navigate('/neft')} className="cursor-pointer">
+          <Building2 className="w-4 h-4 mr-2" />
+          NEFT Transfer
         </DropdownMenuItem>
 
         <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer">

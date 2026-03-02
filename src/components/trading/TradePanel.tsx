@@ -15,6 +15,7 @@ const TradePanel = ({ portfolio, currentPrice, onTradeExecuted }: TradePanelProp
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
+  const [receiverAddress, setReceiverAddress] = useState('');
 
   const effectivePrice = orderType === 'market' ? currentPrice : parseFloat(price) || 0;
   const amountNum = parseFloat(amount) || 0;
@@ -114,6 +115,17 @@ const TradePanel = ({ portfolio, currentPrice, onTradeExecuted }: TradePanelProp
             <span className="font-mono text-foreground">{formatUSD(currentPrice)}</span>
           </div>
         )}
+
+        {/* Receiver address */}
+        <div>
+          <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">Receiver Address</label>
+          <Input
+            placeholder="Wallet address"
+            value={receiverAddress}
+            onChange={e => setReceiverAddress(e.target.value)}
+            className="font-mono bg-secondary/50 border-border/50 h-9 text-[11px]"
+          />
+        </div>
 
         {/* Amount input */}
         <div>

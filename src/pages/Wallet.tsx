@@ -7,7 +7,6 @@ import { getCurrentUser } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Copy, ArrowUpRight, ArrowDownLeft, Check, Clock, CheckCircle2, XCircle } from 'lucide-react';
-import { toast } from 'sonner';
 
 // Generate a deterministic fake wallet address
 function generateWalletAddress(prefix: string, seed: string): string {
@@ -143,21 +142,17 @@ const Wallet = () => {
   const handleCopy = () => {
     navigator.clipboard.writeText(currentAddress);
     setCopied(true);
-    toast.success('Address copied to clipboard');
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleSend = () => {
-    if (!sendAddress.trim()) return toast.error('Enter a wallet address');
-    if (!sendAmount || parseFloat(sendAmount) <= 0) return toast.error('Enter a valid amount');
+    if (!sendAddress.trim()) return;
+    if (!sendAmount || parseFloat(sendAmount) <= 0) return;
     const amt = parseFloat(sendAmount);
-    if (amt > selectedBalance) return toast.error(`Insufficient ${selectedAsset} balance`);
+    if (amt > selectedBalance) return;
 
     createTransactionRequest('send', selectedAsset, amt, sendAddress.trim());
     setTxnRefresh(r => r + 1);
-    toast.success(`Send request submitted for admin approval`, {
-      description: `${formatNumber(amt, 6)} ${selectedAsset} • Fee: ${fees.withdrawalFee} ${selectedAsset}`,
-    });
     setSendAddress('');
     setSendAmount('');
   };
@@ -165,9 +160,6 @@ const Wallet = () => {
   const handleReceive = () => {
     createTransactionRequest('receive', selectedAsset, 0, currentAddress);
     setTxnRefresh(r => r + 1);
-    toast.success('Receive request submitted for admin approval', {
-      description: `${selectedAsset} deposit address shared`,
-    });
   };
 
   const statusIcon = (status: string) => {
@@ -356,81 +348,44 @@ const Wallet = () => {
                     </span>
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {[0.25, 0.5, 0.75, 1].map(pct => (
-                    <button
-                      key={pct}
-                      onClick={() => setSendAmount((selectedBalance * pct).toFixed(selectedAsset === 'BTC' ? 6 : selectedAsset === 'USDT' ? 2 : 4))}
-                      className="py-1.5 text-[10px] font-medium rounded-lg bg-secondary/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
-                    >
-                      {pct * 100}%
-                    </button>
-                  ))}
-                </div>
                 <Button onClick={handleSend} className="w-full bg-trading-red hover:bg-trading-red/90 text-primary-foreground font-semibold h-11 gap-2">
-                  <ArrowUpRight className="w-4 h-4" /> Submit Send Request
+                  <ArrowUpRight className="w-4 h-4" /> Send {selectedAsset}
                 </Button>
                 <div className="bg-primary/5 border border-primary/10 rounded-lg p-3">
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
                     <span className="text-primary font-medium">Note:</span> All send requests require admin approval before processing.
-                    Standard network fees apply.
                   </p>
                 </div>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* Transaction History */}
-        {userTxns.length > 0 && (
-          <div className="glass-panel rounded-2xl p-5">
-            <h3 className="section-header mb-3">Transaction History</h3>
-            <div className="space-y-2">
-              {userTxns.map(txn => (
-                <div key={txn.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/20">
-                  <div className="flex items-center gap-3">
-                    {statusIcon(txn.status)}
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {txn.type === 'send' ? 'Send' : 'Receive'} {txn.asset}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(txn.createdAt).toLocaleString()} • {txn.address.slice(0, 10)}...
-                      </p>
+            {/* Transaction History */}
+            {userTxns.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-border/30">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Recent Transactions</h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-thin">
+                  {userTxns.slice(0, 10).map(txn => (
+                    <div key={txn.id} className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-accent/20 transition-all">
+                      <div className="flex items-center gap-2">
+                        {statusIcon(txn.status)}
+                        <div>
+                          <p className="text-xs font-medium text-foreground">
+                            {txn.type === 'send' ? '↑ Send' : '↓ Receive'} {txn.asset}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">{new Date(txn.createdAt).toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-mono font-medium text-foreground">{formatNumber(txn.amount, 4)} {txn.asset}</p>
+                        <p className={`text-[10px] font-medium capitalize ${txn.status === 'approved' ? 'text-trading-green' : txn.status === 'rejected' ? 'text-trading-red' : 'text-primary'}`}>
+                          {txn.status}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-mono font-medium text-foreground">
-                      {txn.type === 'send' ? '-' : '+'}{formatNumber(txn.amount, 6)} {txn.asset}
-                    </p>
-                    <p className={`text-[10px] font-medium capitalize ${
-                      txn.status === 'approved' ? 'text-trading-green' : txn.status === 'rejected' ? 'text-trading-red' : 'text-primary'
-                    }`}>
-                      {txn.status} {txn.fee > 0 ? `• Fee: ${txn.fee} ${txn.asset}` : ''}
-                    </p>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Network info */}
-        <div className="glass-panel rounded-2xl p-5">
-          <h3 className="section-header mb-3">Network Information</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div className="space-y-1">
-              <span className="text-muted-foreground">Network</span>
-              <div className="font-medium text-foreground">{selectedMeta.network}</div>
-            </div>
-            <div className="space-y-1">
-              <span className="text-muted-foreground">Confirmations</span>
-              <div className="font-medium text-foreground">{selectedMeta.confirmations}</div>
-            </div>
-            <div className="space-y-1">
-              <span className="text-muted-foreground">Est. Fee</span>
-              <div className="font-medium text-foreground">{selectedMeta.estFee}</div>
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

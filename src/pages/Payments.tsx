@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser } from '@/lib/auth';
-import { getUserTransactions, type TransactionRequest } from '@/lib/transactions';
+import { createTransactionRequest, getUserTransactions, type TransactionRequest } from '@/lib/transactions';
 import { formatNumber } from '@/lib/trading';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, CreditCard, Building2, Clock, CheckCircle2, XCircle, X, Wallet } from 'lucide-react';
+import { ArrowLeft, CreditCard, Building2, Clock, CheckCircle2, XCircle, Wallet, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 const DEPOSIT_AMOUNTS = [250, 750, 2000];
@@ -18,11 +18,14 @@ const Payments = () => {
   const [cardNumber, setCardNumber] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [cvv, setCvv] = useState('');
+  const [showCvv, setShowCvv] = useState(false);
   const [cardholderFirst, setCardholderFirst] = useState('');
   const [cardholderLast, setCardholderLast] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawReason, setWithdrawReason] = useState('');
   const [depositMethod, setDepositMethod] = useState<'card' | 'wallet'>('card');
+  const [declarationAccepted, setDeclarationAccepted] = useState(false);
+  const [txnRefresh, setTxnRefresh] = useState(0);
 
   const userTxns = currentUser ? getUserTransactions(currentUser.id) : [];
 
@@ -38,34 +41,54 @@ const Payments = () => {
     return 'text-primary';
   };
 
+  const formatCardNumber = (val: string) => {
+    const cleaned = val.replace(/\D/g, '').slice(0, 16);
+    return cleaned.replace(/(.{4})/g, '$1 ').trim();
+  };
+
+  const formatExpiry = (val: string) => {
+    const cleaned = val.replace(/\D/g, '').slice(0, 4);
+    if (cleaned.length > 2) return cleaned.slice(0, 2) + '/' + cleaned.slice(2);
+    return cleaned;
+  };
+
+  const handleCvvChange = (val: string) => {
+    setCvv(val.replace(/\D/g, '').slice(0, 4));
+  };
+
+  const handleNameChange = (setter: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setter(e.target.value.replace(/[^a-zA-Z\s]/g, ''));
+  };
+
   const handleDeposit = () => {
     if (!depositAmount || parseFloat(depositAmount) <= 0) return toast.error('Enter a valid amount');
     if (depositMethod === 'card') {
       if (!cardNumber || cardNumber.replace(/\s/g, '').length < 16) return toast.error('Enter a valid card number');
-      if (!expiryDate) return toast.error('Enter expiry date');
-      if (!cvv || cvv.length < 3) return toast.error('Enter CVV');
+      if (!expiryDate || expiryDate.length < 5) return toast.error('Enter a valid expiry date');
+      if (!cvv || cvv.length < 3) return toast.error('Enter a valid CVV');
+      if (!cardholderFirst.trim() || !cardholderLast.trim()) return toast.error('Enter cardholder name');
     }
-    toast.success('Deposit request submitted for approval', {
-      description: `$${depositAmount} via ${depositMethod === 'card' ? 'Credit/Debit Card' : 'Crypto Wallet'}`,
-    });
+    if (!declarationAccepted) return toast.error('Please accept the declaration');
+
+    // Create transaction request for admin approval
+    createTransactionRequest('receive', 'USDT', parseFloat(depositAmount), depositMethod === 'card' ? 'Card Deposit' : 'Wallet Deposit');
+    setTxnRefresh(r => r + 1);
     setDepositAmount('');
     setCardNumber('');
     setExpiryDate('');
     setCvv('');
+    setCardholderFirst('');
+    setCardholderLast('');
+    setDeclarationAccepted(false);
   };
 
   const handleWithdraw = () => {
     if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) return toast.error('Enter a valid amount');
-    toast.success('Withdrawal request submitted for approval', {
-      description: `$${withdrawAmount} via Bank Transfer`,
-    });
+
+    createTransactionRequest('send', 'USDT', parseFloat(withdrawAmount), 'Bank Transfer');
+    setTxnRefresh(r => r + 1);
     setWithdrawAmount('');
     setWithdrawReason('');
-  };
-
-  const formatCardNumber = (val: string) => {
-    const cleaned = val.replace(/\D/g, '').slice(0, 16);
-    return cleaned.replace(/(.{4})/g, '$1 ').trim();
   };
 
   const tabs = [
@@ -86,7 +109,6 @@ const Payments = () => {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6">
-        {/* Tabs */}
         <div className="flex border-b border-border mb-6">
           {tabs.map(tab => (
             <button
@@ -110,25 +132,35 @@ const Payments = () => {
             <div className="flex gap-3 overflow-x-auto pb-2">
               <button
                 onClick={() => setDepositMethod('card')}
-                className={`flex flex-col items-center gap-2 p-4 rounded-xl border min-w-[120px] transition-all ${
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border min-w-[140px] transition-all ${
                   depositMethod === 'card'
                     ? 'border-primary bg-primary/5'
                     : 'border-border hover:border-muted-foreground'
                 }`}
               >
-                <CreditCard className="w-8 h-8 text-foreground" />
-                <span className="text-xs font-medium text-foreground">Credit or Debit Card</span>
+                {/* Visa & Mastercard logos */}
+                <div className="flex items-center gap-2">
+                  <svg width="32" height="20" viewBox="0 0 32 20" fill="none"><rect width="32" height="20" rx="3" fill="#1A1F71"/><text x="4" y="14" fontSize="9" fontWeight="bold" fill="white">VISA</text></svg>
+                  <svg width="32" height="20" viewBox="0 0 32 20" fill="none"><rect width="32" height="20" rx="3" fill="#252525"/><circle cx="12" cy="10" r="6" fill="#EB001B"/><circle cx="20" cy="10" r="6" fill="#F79E1B"/><path d="M16 5.4A6 6 0 0 1 18 10a6 6 0 0 1-2 4.6A6 6 0 0 1 14 10a6 6 0 0 1 2-4.6z" fill="#FF5F00"/></svg>
+                </div>
+                <span className="text-xs font-medium text-foreground">Credit/Debit Cards</span>
+                <span className="text-[10px] text-muted-foreground">Any Credit Or Debit Card</span>
               </button>
               <button
                 onClick={() => setDepositMethod('wallet')}
-                className={`flex flex-col items-center gap-2 p-4 rounded-xl border min-w-[120px] transition-all ${
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border min-w-[140px] transition-all ${
                   depositMethod === 'wallet'
                     ? 'border-primary bg-primary/5'
                     : 'border-border hover:border-muted-foreground'
                 }`}
               >
-                <Wallet className="w-8 h-8 text-foreground" />
-                <span className="text-xs font-medium text-foreground">Crypto Wallet</span>
+                {/* Binance Connect logo */}
+                <div className="flex items-center gap-1.5">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#F0B90B"/><path d="M12 4L8.5 7.5 10.3 9.3 12 7.6 13.7 9.3 15.5 7.5 12 4z" fill="white"/><path d="M4 12l2-2 2 2-2 2-2-2zM16 12l2-2 2 2-2 2-2-2z" fill="white"/><path d="M12 14.4L10.3 12.7 8.5 14.5 12 18l3.5-3.5-1.8-1.8L12 14.4z" fill="white"/><rect x="10.5" y="10.5" width="3" height="3" rx="0.5" fill="white"/></svg>
+                  <span className="text-[10px] font-bold text-foreground">Binance</span>
+                </div>
+                <span className="text-xs font-medium text-foreground">Crypto Wallets</span>
+                <span className="text-[10px] text-muted-foreground">Binance Connect & More</span>
               </button>
             </div>
 
@@ -136,7 +168,7 @@ const Payments = () => {
               {/* Left: Amount */}
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-foreground">
-                  {depositMethod === 'card' ? 'Secure deposit using credit card' : 'Deposit via crypto wallet'}
+                  {depositMethod === 'card' ? 'Secure deposit using Credit/Debit Card & Wallets' : 'Deposit via crypto wallet'}
                 </h3>
                 <div>
                   <label className="text-xs text-muted-foreground mb-1.5 block">Amount</label>
@@ -183,23 +215,32 @@ const Payments = () => {
                     <div>
                       <label className="text-xs text-muted-foreground mb-1.5 block">Expiry Date</label>
                       <Input
-                        placeholder="mm/yy"
+                        placeholder="MM/YY"
                         value={expiryDate}
-                        onChange={e => setExpiryDate(e.target.value)}
+                        onChange={e => setExpiryDate(formatExpiry(e.target.value))}
                         className="bg-secondary/50 border-border/50 h-11 font-mono"
                         maxLength={5}
                       />
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground mb-1.5 block">CVV</label>
-                      <Input
-                        type="password"
-                        placeholder="***"
-                        value={cvv}
-                        onChange={e => setCvv(e.target.value)}
-                        className="bg-secondary/50 border-border/50 h-11 font-mono"
-                        maxLength={4}
-                      />
+                      <div className="relative">
+                        <Input
+                          type={showCvv ? 'text' : 'password'}
+                          placeholder="***"
+                          value={cvv}
+                          onChange={e => handleCvvChange(e.target.value)}
+                          className="bg-secondary/50 border-border/50 h-11 font-mono pr-10"
+                          maxLength={4}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCvv(!showCvv)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {showCvv ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <div>
@@ -210,7 +251,7 @@ const Payments = () => {
                         <Input
                           placeholder="First name"
                           value={cardholderFirst}
-                          onChange={e => setCardholderFirst(e.target.value)}
+                          onChange={handleNameChange(setCardholderFirst)}
                           className="bg-secondary/50 border-border/50 h-10"
                         />
                       </div>
@@ -219,7 +260,7 @@ const Payments = () => {
                         <Input
                           placeholder="Last name"
                           value={cardholderLast}
-                          onChange={e => setCardholderLast(e.target.value)}
+                          onChange={handleNameChange(setCardholderLast)}
                           className="bg-secondary/50 border-border/50 h-10"
                         />
                       </div>
@@ -228,6 +269,19 @@ const Payments = () => {
                 </div>
               )}
             </div>
+
+            {/* Declaration */}
+            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border border-border/50 hover:bg-accent/10 transition-all">
+              <input
+                type="checkbox"
+                checked={declarationAccepted}
+                onChange={e => setDeclarationAccepted(e.target.checked)}
+                className="mt-0.5 accent-primary w-4 h-4"
+              />
+              <span className="text-xs text-muted-foreground leading-relaxed">
+                I have read and accepted the <span className="text-primary font-medium underline cursor-pointer">Declaration of Deposit</span>
+              </span>
+            </label>
 
             <Button onClick={handleDeposit} className="w-full h-12 text-base font-semibold bg-primary text-primary-foreground hover:bg-primary/90">
               Deposit

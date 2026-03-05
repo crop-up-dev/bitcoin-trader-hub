@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType, IChartApi, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
-import { useBinanceKlines } from '@/hooks/useBinanceData';
+import { useBinanceKlines, useBinanceTicker, SUPPORTED_ASSETS, TickerData } from '@/hooks/useBinanceData';
+import { formatNumber, formatUSD } from '@/lib/trading';
+import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
 
 const INTERVALS = [
   { label: '1m', value: '1m' },
@@ -16,10 +18,15 @@ const INTERVALS = [
 const PriceChart = ({ symbol = 'btcusdt' }: { symbol?: string }) => {
   const [interval, setInterval] = useState('1h');
   const klines = useBinanceKlines(symbol, interval);
+  const { ticker, prevPrice } = useBinanceTicker(symbol);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<any>(null);
   const volumeSeriesRef = useRef<any>(null);
+
+  const currentAsset = SUPPORTED_ASSETS.find(a => a.symbol === symbol) || SUPPORTED_ASSETS[0];
+  const isUp = ticker.priceChangePercent >= 0;
+  const priceDirection = ticker.price > prevPrice ? 'up' : ticker.price < prevPrice ? 'down' : 'same';
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -101,8 +108,40 @@ const PriceChart = ({ symbol = 'btcusdt' }: { symbol?: string }) => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-1 px-3 py-2 border-b border-border/50">
-        <span className="section-header mr-3">Chart</span>
+      {/* Binance-style price info bar */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-3 py-2 border-b border-border/50">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-foreground">{currentAsset.base}/USDT</span>
+          <span className={`font-mono text-lg font-bold tracking-tight ${priceDirection === 'up' ? 'text-trading-green' : priceDirection === 'down' ? 'text-trading-red' : 'text-foreground'}`}>
+            {formatUSD(ticker.price)}
+          </span>
+          <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-mono font-medium ${isUp ? 'bg-trading-green/10 text-trading-green' : 'bg-trading-red/10 text-trading-red'}`}>
+            {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {isUp ? '+' : ''}{formatNumber(ticker.priceChangePercent)}%
+          </div>
+        </div>
+        <div className="flex items-center gap-5 text-[11px] text-muted-foreground">
+          <div>
+            <span className="block text-[9px] uppercase tracking-wider">24h High</span>
+            <span className="font-mono text-foreground text-xs">{formatUSD(ticker.high)}</span>
+          </div>
+          <div>
+            <span className="block text-[9px] uppercase tracking-wider">24h Low</span>
+            <span className="font-mono text-foreground text-xs">{formatUSD(ticker.low)}</span>
+          </div>
+          <div>
+            <span className="block text-[9px] uppercase tracking-wider">24h Vol</span>
+            <span className="font-mono text-foreground text-xs">{formatNumber(ticker.volume, 2)} {currentAsset.base}</span>
+          </div>
+          <div className="flex items-center gap-1 text-trading-green">
+            <Activity className="w-3 h-3" />
+            <span className="text-[10px] font-medium">Live</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Interval selector */}
+      <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border/50">
         {INTERVALS.map(i => (
           <button
             key={i.value}

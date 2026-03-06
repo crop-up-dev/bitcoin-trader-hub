@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute = ({ children, adminOnly }: ProtectedRouteProps) => {
   const user = getCurrentUser();
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/landing" replace />;
   if (adminOnly && user.role !== 'admin') return <Navigate to="/" replace />;
   return <>{children}</>;
 };

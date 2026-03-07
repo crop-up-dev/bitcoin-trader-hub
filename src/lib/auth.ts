@@ -1,3 +1,6 @@
+import { USE_BACKEND } from './api-config';
+import { authAPI } from './api';
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -37,7 +40,6 @@ function saveUsers(users: AuthUser[]) {
 
 function seedAdmin() {
   let users = getUsers();
-  // Remove any old admin accounts and ensure correct admin exists
   users = users.filter(u => u.id !== 'admin-001' && u.email !== 'cropup4@gmail.com');
   users.push({
     id: 'admin-001',
@@ -50,17 +52,23 @@ function seedAdmin() {
   });
   saveUsers(users);
 
-  // Fix stale session: if logged-in user no longer exists, clear session
   const currentSessionId = localStorage.getItem(SESSION_KEY);
   if (currentSessionId && !users.find(u => u.id === currentSessionId)) {
     localStorage.removeItem(SESSION_KEY);
   }
 }
 
-// Seed on module load
-seedAdmin();
+// Seed on module load (localStorage mode only)
+if (!USE_BACKEND) {
+  seedAdmin();
+}
 
-export function register(email: string, password: string, displayName: string): { success: boolean; error?: string } {
+export async function register(email: string, password: string, displayName: string): Promise<{ success: boolean; error?: string }> {
+  if (USE_BACKEND) {
+    const res = await authAPI.register(email, password, displayName);
+    return res.ok ? { success: true } : { success: false, error: res.error };
+  }
+  // localStorage fallback
   const users = getUsers();
   if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
     return { success: false, error: 'Email already registered' };
@@ -79,7 +87,16 @@ export function register(email: string, password: string, displayName: string): 
   return { success: true };
 }
 
-export function login(email: string, password: string): { success: boolean; error?: string; user?: AuthUser } {
+export async function login(email: string, password: string): Promise<{ success: boolean; error?: string; user?: AuthUser }> {
+  if (USE_BACKEND) {
+    const res = await authAPI.login(email, password);
+    if (res.ok && res.data) {
+      localStorage.setItem(SESSION_KEY, res.data.token);
+      return { success: true, user: res.data.user };
+    }
+    return { success: false, error: res.error || res.data?.error };
+  }
+  // localStorage fallback
   const users = getUsers();
   const user = users.find(u => u.email === email.toLowerCase().trim());
   if (!user) return { success: false, error: 'Invalid email or password' };
@@ -90,33 +107,86 @@ export function login(email: string, password: string): { success: boolean; erro
 }
 
 export function logout() {
+  if (USE_BACKEND) {
+    authAPI.logout();
+  }
   localStorage.removeItem(SESSION_KEY);
 }
 
 export function getCurrentUser(): AuthUser | null {
+  // Sync mode — backend would use token-based auth
   const id = localStorage.getItem(SESSION_KEY);
   if (!id) return null;
+  if (USE_BACKEND) {
+    // In backend mode, current user is fetched async. For sync compat, use cached value.
+    const cached = localStorage.getItem('hub-current-user');
+    if (cached) try { return JSON.parse(cached); } catch {}
+    return null;
+  }
   const users = getUsers();
   return users.find(u => u.id === id) || null;
 }
 
+/** Async version for backend mode */
+export async function fetchCurrentUser(): Promise<AuthUser | null> {
+  if (USE_BACKEND) {
+    const res = await authAPI.getCurrentUser();
+    if (res.ok && res.data) {
+      localStorage.setItem('hub-current-user', JSON.stringify(res.data));
+      return res.data;
+    }
+    return null;
+  }
+  return getCurrentUser();
+}
+
 export function getAllUsers(): AuthUser[] {
+  if (USE_BACKEND) {
+    // Use cached; call fetchAllUsers for fresh data
+    const cached = localStorage.getItem('hub-all-users-cache');
+    if (cached) try { return JSON.parse(cached); } catch {}
+    return [];
+  }
   return getUsers();
 }
 
-export function updateUserRole(userId: string, role: 'user' | 'admin') {
+export async function fetchAllUsers(): Promise<AuthUser[]> {
+  if (USE_BACKEND) {
+    const res = await authAPI.getAllUsers();
+    if (res.ok && res.data) {
+      localStorage.setItem('hub-all-users-cache', JSON.stringify(res.data));
+      return res.data;
+    }
+    return [];
+  }
+  return getUsers();
+}
+
+export async function updateUserRole(userId: string, role: 'user' | 'admin') {
+  if (USE_BACKEND) {
+    await authAPI.updateUserRole(userId, role);
+    return;
+  }
   const users = getUsers();
   const user = users.find(u => u.id === userId);
   if (user) { user.role = role; saveUsers(users); }
 }
 
-export function toggleUserActive(userId: string) {
+export async function toggleUserActive(userId: string) {
+  if (USE_BACKEND) {
+    await authAPI.toggleUserActive(userId);
+    return;
+  }
   const users = getUsers();
   const user = users.find(u => u.id === userId);
   if (user) { user.isActive = !user.isActive; saveUsers(users); }
 }
 
-export function deleteUser(userId: string) {
+export async function deleteUser(userId: string) {
+  if (USE_BACKEND) {
+    await authAPI.deleteUser(userId);
+    return;
+  }
   const users = getUsers().filter(u => u.id !== userId);
   saveUsers(users);
 }

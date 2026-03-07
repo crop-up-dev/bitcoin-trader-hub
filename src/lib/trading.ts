@@ -1,3 +1,6 @@
+import { USE_BACKEND } from './api-config';
+import { tradingAPI } from './api';
+
 export interface Trade {
   id: string;
   timestamp: number;
@@ -33,8 +36,19 @@ export function loadPortfolio(): Portfolio {
   return { ...DEFAULT_PORTFOLIO };
 }
 
+export async function fetchPortfolio(): Promise<Portfolio> {
+  if (USE_BACKEND) {
+    const res = await tradingAPI.loadPortfolio();
+    if (res.ok && res.data) return res.data;
+  }
+  return loadPortfolio();
+}
+
 export function savePortfolio(portfolio: Portfolio) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(portfolio));
+  if (USE_BACKEND) {
+    tradingAPI.savePortfolio(portfolio);
+  }
 }
 
 export function executeTrade(
@@ -76,6 +90,12 @@ export function executeTrade(
   ];
 
   savePortfolio(newPortfolio);
+
+  // Also send to backend if enabled
+  if (USE_BACKEND) {
+    tradingAPI.executeTrade(side, type, price, amount);
+  }
+
   return newPortfolio;
 }
 

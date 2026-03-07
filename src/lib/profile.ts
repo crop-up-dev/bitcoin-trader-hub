@@ -1,6 +1,9 @@
+import { USE_BACKEND } from './api-config';
+import { profileAPI } from './api';
+
 export interface UserProfile {
   displayName: string;
-  avatar: string; // URL or data URI
+  avatar: string;
   joinedAt: number;
   settings: {
     defaultOrderType: 'market' | 'limit';
@@ -50,9 +53,8 @@ export function loadProfile(): UserProfile {
     const data = localStorage.getItem(PROFILE_KEY);
     if (data) {
       const profile = JSON.parse(data);
-      // Sync display name with auth user if available
       const sessionId = localStorage.getItem('hub-session');
-      if (sessionId) {
+      if (sessionId && !USE_BACKEND) {
         const users = JSON.parse(localStorage.getItem('hub-users') || '[]');
         const authUser = users.find((u: any) => u.id === sessionId);
         if (authUser && authUser.displayName) {
@@ -62,9 +64,8 @@ export function loadProfile(): UserProfile {
       return profile;
     }
   } catch {}
-  // Check auth user for default name
   const sessionId = localStorage.getItem('hub-session');
-  if (sessionId) {
+  if (sessionId && !USE_BACKEND) {
     try {
       const users = JSON.parse(localStorage.getItem('hub-users') || '[]');
       const authUser = users.find((u: any) => u.id === sessionId);
@@ -76,6 +77,17 @@ export function loadProfile(): UserProfile {
   return { ...DEFAULT_PROFILE, joinedAt: Date.now() };
 }
 
+export async function fetchProfile(): Promise<UserProfile> {
+  if (USE_BACKEND) {
+    const res = await profileAPI.load();
+    if (res.ok && res.data) return res.data;
+  }
+  return loadProfile();
+}
+
 export function saveProfile(profile: UserProfile) {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  if (USE_BACKEND) {
+    profileAPI.save(profile);
+  }
 }

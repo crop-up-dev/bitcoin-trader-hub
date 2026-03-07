@@ -1,4 +1,6 @@
 import { getCurrentUser } from './auth';
+import { USE_BACKEND } from './api-config';
+import { transactionsAPI } from './api';
 
 export interface TransactionRequest {
   id: string;
@@ -21,7 +23,6 @@ export interface TransactionRequest {
 
 const TXN_KEY = 'hub-transactions';
 
-// Standard fee schedule (Binance-style)
 export const FEE_SCHEDULE: Record<string, { makerFee: number; takerFee: number; withdrawalFee: number }> = {
   BTC: { makerFee: 0.001, takerFee: 0.001, withdrawalFee: 0.0005 },
   ETH: { makerFee: 0.001, takerFee: 0.001, withdrawalFee: 0.005 },
@@ -35,7 +36,6 @@ export const FEE_SCHEDULE: Record<string, { makerFee: number; takerFee: number; 
   APE: { makerFee: 0.001, takerFee: 0.001, withdrawalFee: 0.5 },
   MANA: { makerFee: 0.001, takerFee: 0.001, withdrawalFee: 10.0 },
   SAND: { makerFee: 0.001, takerFee: 0.001, withdrawalFee: 5.0 },
-  // Default for stocks/forex
   DEFAULT: { makerFee: 0.001, takerFee: 0.001, withdrawalFee: 0.0 },
 };
 
@@ -96,6 +96,11 @@ export function createTransactionRequest(
     createdAt: Date.now(),
   };
 
+  if (USE_BACKEND) {
+    transactionsAPI.create(type, asset, amount, address);
+  }
+
+  // Always save locally too for immediate UI
   const txns = loadTransactions();
   txns.unshift(txn);
   saveTransactions(txns);
@@ -106,15 +111,36 @@ export function getAllTransactions(): TransactionRequest[] {
   return loadTransactions();
 }
 
+export async function fetchAllTransactions(): Promise<TransactionRequest[]> {
+  if (USE_BACKEND) {
+    const res = await transactionsAPI.getAll();
+    if (res.ok && res.data) return res.data;
+  }
+  return loadTransactions();
+}
+
 export function getUserTransactions(userId: string): TransactionRequest[] {
   return loadTransactions().filter(t => t.userId === userId);
+}
+
+export async function fetchUserTransactions(userId: string): Promise<TransactionRequest[]> {
+  if (USE_BACKEND) {
+    const res = await transactionsAPI.getUserTransactions(userId);
+    if (res.ok && res.data) return res.data;
+  }
+  return getUserTransactions(userId);
 }
 
 export function getPendingTransactions(): TransactionRequest[] {
   return loadTransactions().filter(t => t.status === 'pending');
 }
 
-export function approveTransaction(txnId: string, adminName: string): boolean {
+export async function approveTransaction(txnId: string, adminName: string): Promise<boolean> {
+  if (USE_BACKEND) {
+    const res = await transactionsAPI.approve(txnId);
+    if (res.ok) return true;
+  }
+  // localStorage fallback
   const txns = loadTransactions();
   const txn = txns.find(t => t.id === txnId);
   if (!txn || txn.status !== 'pending') return false;
@@ -125,7 +151,11 @@ export function approveTransaction(txnId: string, adminName: string): boolean {
   return true;
 }
 
-export function rejectTransaction(txnId: string, adminName: string, note?: string): boolean {
+export async function rejectTransaction(txnId: string, adminName: string, note?: string): Promise<boolean> {
+  if (USE_BACKEND) {
+    const res = await transactionsAPI.reject(txnId, note);
+    if (res.ok) return true;
+  }
   const txns = loadTransactions();
   const txn = txns.find(t => t.id === txnId);
   if (!txn || txn.status !== 'pending') return false;

@@ -15,7 +15,7 @@ const SignUp = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 6) {
       toast({ title: 'Error', description: 'Password must be at least 6 characters', variant: 'destructive' });
@@ -26,7 +26,7 @@ const SignUp = () => {
       return;
     }
     setLoading(true);
-    const result = register(email, password, displayName);
+    const result = await register(email, password, displayName);
     setLoading(false);
     if (result.success) {
       toast({ title: 'Account Created', description: 'You can now sign in' });
